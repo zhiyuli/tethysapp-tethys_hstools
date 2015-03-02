@@ -2,7 +2,7 @@ import os
 from tethys_apps.base.persistent_store import get_persistent_store_engine as gpse
 
 
-
+import urllib2
 from lxml import etree
 from datetime import datetime
 from datetime import timedelta
@@ -40,7 +40,14 @@ def time_str_to_datetime(t):
             offset_hrs = int(t[-6:-3])
             offset_min = int(t[-2:])                                                                                     # Changed By Drew
             t_time = t[:-6]
-            temp_datetime=datetime.strptime(unicode(t_time), '%Y-%m-%dT%H:%M:%S.%f')
+
+            temp_datetime=None  #added by Drew 2015-02-27
+            if len(t_time)==19:
+                temp_datetime=datetime.strptime(unicode(t_time), '%Y-%m-%dT%H:%M:%S')
+            else:
+                temp_datetime=datetime.strptime(unicode(t_time), '%Y-%m-%dT%H:%M:%S.%f')
+
+
             offset=timedelta(hours=int(offset_hrs),minutes=int(offset_min))
             time_datetime=temp_datetime + offset
             ret = time_datetime
@@ -50,7 +57,12 @@ def time_str_to_datetime(t):
                 ret = datetime.strptime(unicode(t), '%Y-%m-%dT%H:%M:%S')
             except ValueError:
                 #if the time format looks like '2014-07-22 10:45:00'
-                ret = datetime.strptime(unicode(t), '%Y-%m-%d %H:%M:%S')
+                try:
+                    ret = datetime.strptime(unicode(t), '%Y-%m-%d %H:%M:%S')
+                except ValueError:
+                    print ("time_str_to_datetime error")
+                    raise Exception('time_str_to_datetime error')
+
     return ret
 
 
@@ -159,6 +171,74 @@ def parse_1_0_and_1_1(root):
             return "Parsing error: The waterml document doesn't appear to be a WaterML 1.0/1.1 time series"
     except:
         return "Parsing error: The Data in the Url, or in the request, was not correctly formatted."
+
+# Prepare for Chart Parameters
+def chartPara(html, filename):
+
+    #print (html)
+
+    root = etree.XML(html)
+    wml_version = get_version(root)
+
+    ts={}
+    if wml_version == '1':
+        ts = parse_1_0_and_1_1(root)
+    elif wml_version == '2.0':
+        ts = parse_2_0(root)
+
+    #print ts
+
+    title_text=filename
+    x_title_text = "Time"
+    y_title_text = "Measures'"
+    serise_text=filename
+
+    # Timeseries plot example
+    timeseries_plot_object = {
+        'chart': {
+            'type': 'area',
+            'zoomType': 'x'
+        },
+        'title': {
+            'text': title_text
+        },
+        'xAxis': {
+            'maxZoom': 3 * 24 * 3600000, # 30 days in milliseconds
+            'type': 'datetime',
+            'title': {
+                'text': x_title_text
+            }
+        },
+        'yAxis': {
+            'title': {
+                'text': y_title_text
+            }
+        },
+        'legend': {
+            'layout': 'vertical',
+            'align': 'right',
+            'verticalAlign': 'top',
+            'x': -350,
+            'y': 125,
+            'floating': True,
+            'borderWidth': 1,
+            'backgroundColor': '#FFFFFF'
+        },
+        'series': [{
+            'name': serise_text,
+            'data':ts["for_highchart"]
+        }]
+    }
+
+
+    timeseries_plot = {'highcharts_object': timeseries_plot_object,
+                     'width': '500px',
+                     'height': '500px'}
+
+
+    return timeseries_plot
+
+
 
 def parse_2_0(root):
     try:
