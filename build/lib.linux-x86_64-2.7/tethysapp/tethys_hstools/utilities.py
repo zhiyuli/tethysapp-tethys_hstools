@@ -1,0 +1,235 @@
+import os
+from tethys_apps.base.persistent_store import get_persistent_store_engine as gpse
+
+
+
+from lxml import etree
+from datetime import datetime
+from datetime import timedelta
+
+def get_persistent_store_engine(persistent_store_name):
+    """
+    Returns an SQLAlchemy engine object for the persistent store name provided.
+    """
+    # Derive app name
+    app_name = os.path.split(os.path.dirname(__file__))[1]
+
+    # Get engine
+    return gpse(app_name, persistent_store_name)
+
+def get_version(root):
+    wml_version = None
+    for element in root.iter():
+        if '{http://www.opengis.net/waterml/2.0}Collection' in element.tag:
+            wml_version = '2.0'
+            break
+        if '{http://www.cuahsi.org/waterML/1.1/}timeSeriesResponse' \
+        or '{http://www.cuahsi.org/waterML/1.0/}timeSeriesResponse' in element.tag:
+            wml_version = '1'
+            break
+    return wml_version
+
+
+def time_str_to_datetime(t):
+    # if time format looks like '2014-07-22T10:45:00.000'
+    try:
+        ret = datetime.strptime(unicode(t), '%Y-%m-%dT%H:%M:%S.%f')
+    except ValueError:
+        try:
+            # if time format looks like '2014-07-22T10:45:00.000-05:00'
+            offset_hrs = int(t[-6:-3])
+            offset_min = int(t[-2:])                                                                                     # Changed By Drew
+            t_time = t[:-6]
+            temp_datetime=datetime.strptime(unicode(t_time), '%Y-%m-%dT%H:%M:%S.%f')
+            offset=timedelta(hours=int(offset_hrs),minutes=int(offset_min))
+            time_datetime=temp_datetime + offset
+            ret = time_datetime
+        except ValueError:
+            try:
+                # if time format looks like '2014-07-22T10:45:00'
+                ret = datetime.strptime(unicode(t), '%Y-%m-%dT%H:%M:%S')
+            except ValueError:
+                #if the time format looks like '2014-07-22 10:45:00'
+                ret = datetime.strptime(unicode(t), '%Y-%m-%d %H:%M:%S')
+    return ret
+
+
+def time_to_int(t):
+    # if time format looks like '2014-07-22T10:45:00.000'
+    try:
+        ret = int(datetime.strptime(unicode(t), '%Y-%m-%dT%H:%M:%S.%f').strftime('%s'))
+    except ValueError:
+        try:
+            # if time format looks like '2014-07-22T10:45:00.000-05:00'
+            offset_hrs = int(t[-6:-3])
+            offset_min = int(t[-2:])                                                                                     # Changed By Drew
+            t = t[:-6]
+
+            cur_datetime=datetime.strptime(unicode(t), '%Y-%m-%dT%H:%M:%S.%f')
+            epoch_secs= (cur_datetime-datetime(1970,1,1)).total_seconds()
+
+            ##epoch_secs = int(datetime.strptime(unicode(t), '%Y-%m-%dT%H:%M:%S.%f').strftime('%s'))
+            ret = epoch_secs + offset_hrs*3600 + offset_min*60
+        except ValueError:
+            try:
+                # if time format looks like '2014-07-22T10:45:00'
+                ret = int(datetime.strptime(unicode(t), '%Y-%m-%dT%H:%M:%S').strftime('%s'))
+            except ValueError:
+                #if the time format looks like '2014-07-22 10:45:00'
+                ret = int(datetime.strptime(unicode(t), '%Y-%m-%d %H:%M:%S').strftime('%s'))
+    return ret
+
+
+def parse_1_0_and_1_1(root):
+    try:
+        if 'timeSeriesResponse' in root.tag:
+            time_series = root[1]
+            ts = etree.tostring(time_series)
+            values = {}
+            for_graph = []
+            units, site_name, variable_name, latitude, longitude, methodCode, method, QCcode, QClevel = None, None, None, None, None, None, None, None, None
+            unit_is_set = False
+            methodCode_set = False
+            QCcode_set = False
+            for element in root.iter():
+                brack_lock = -1
+                if '}' in element.tag:
+                    brack_lock = element.tag.index('}')  #The namespace in the tag is enclosed in {}.
+                tag = element.tag[brack_lock+1:]     #Takes only actual tag, no namespace
+                if 'unitName' == tag:  # in the xml there is a unit for the value, then for time. just take the first
+                    if not unit_is_set:
+                        units = element.text
+                        unit_is_set = True
+                if 'value' == tag:
+                    values[element.attrib['dateTime']] = element.text
+                    if not methodCode_set:
+                        for a in element.attrib:
+                            if 'methodCode' in a:
+                                methodCode = element.attrib[a]
+                                methodCode_set = True
+                            if 'qualityControlLevelCode' in a:
+                                QCcode = element.attrib[a]
+                                QCcode_set = True
+                if 'siteName' == tag:
+                    site_name = element.text
+                if 'variableName' == tag:
+                    variable_name = element.text
+                if 'latitude' == tag:
+                    latitude = element.text
+                if 'longitude' == tag:
+                    longitude = element.text
+            if methodCode == 1:
+                method = 'No method specified'
+            else:
+                method = 'Unknown method'
+
+            if QCcode == 0:
+                QClevel = "Raw Data"
+            elif QCcode == 1:
+                QClevel = "Quality Controlled Data"
+            elif QCcode == 2:
+                QClevel = "Derived Products"
+            elif QCcode == 3:
+                QClevel = "Interpreted Products"
+            elif QCcode == 4:
+                QClevel = "Knowledge Products"
+            else:
+                QClevel = 'Unknown'
+
+            for k, v in values.items():
+                t = time_to_int(k)
+                for_graph.append({'x': t, 'y': float(v)})
+            smallest_time = list(values.keys())[0]
+            for t in list(values.keys()):
+                if t < smallest_time:
+                    smallest_time = t
+            return {'time_series': ts,
+                    'site_name': site_name,
+                    'start_date': smallest_time,
+                    'variable_name': variable_name,
+                    'units': units,
+                    'values': values,
+                    'for_graph': for_graph,
+                    'wml_version': '1',
+                    'latitude': latitude,
+                    'longitude': longitude,
+                    'QClevel': QClevel,
+                    'method': method}
+        else:
+            return "Parsing error: The waterml document doesn't appear to be a WaterML 1.0/1.1 time series"
+    except:
+        return "Parsing error: The Data in the Url, or in the request, was not correctly formatted."
+
+def parse_2_0(root):
+    try:
+        if 'Collection' in root.tag:
+            ts = etree.tostring(root)
+            keys = []
+            vals = []
+            for_graph = []
+            for_highchart=[]
+            units, site_name, variable_name, latitude, longitude, method = None, None, None, None, None, None
+            name_is_set = False
+            variable_name = root[1].text
+            for element in root.iter():
+                if 'MeasurementTVP' in element.tag:
+                        for e in element:
+                            if 'time' in e.tag:
+                                keys.append(e.text)
+                            if 'value' in e.tag:
+                                vals.append(e.text)
+                if 'uom' in element.tag:
+                    units = element.text
+                if 'MonitoringPoint' in element.tag:
+                    for e in element.iter():
+                        if 'name' in e.tag and not name_is_set:
+                            site_name = e.text
+                            name_is_set = True
+                        if 'pos' in e.tag:
+                            lat_long = e.text
+                            lat_long = lat_long.split(' ')
+                            latitude = lat_long[0]
+                            longitude = lat_long[1]
+                if 'observedProperty' in element.tag:
+                    for a in element.attrib:
+                        if 'title' in a:
+                            variable_name = element.attrib[a]
+                if 'ObservationProcess' in element.tag:
+                    for e in element.iter():
+                        if 'processType' in e.tag:
+                            for a in e.attrib:
+                                if 'title' in a:
+                                    method=e.attrib[a]
+
+            for i in range(0,len(keys)):
+                time_str=keys[i]
+                time_obj=time_str_to_datetime(time_str)
+                val_obj=float(vals[i])
+                item=[time_obj,val_obj]
+                for_highchart.append(item)
+
+            values = dict(zip(keys, vals))
+            for k, v in values.items():
+                t = time_to_int(k)
+                for_graph.append({'x': t, 'y': float(v)})
+            smallest_time = list(values.keys())[0]
+            for t in list(values.keys()):
+                if t < smallest_time:
+                    smallest_time = t
+            return {'time_series': ts,
+                    'site_name': site_name,
+                    'start_date': smallest_time,
+                    'variable_name': variable_name,
+                    'units': units,
+                    'values': values,
+                    'for_graph': for_graph,
+                    'wml_version': '2.0',
+                    'latitude': latitude,
+                    'longitude': longitude,
+                    'for_highchart':for_highchart
+                    }
+        else:
+            return "Parsing error: The waterml document doesn't appear to be a WaterML 2.0 time series"
+    except:
+        return "Parsing error: The Data in the Url, or in the request, was not correctly formatted."
+
