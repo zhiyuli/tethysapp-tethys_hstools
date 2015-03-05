@@ -5,7 +5,7 @@ from utilities import *
 #Base_Url_HydroShare REST API
 url_base='http://dev.hydroshare.org/hsapi/resource/{0}/files/{1}'
 
-#Call in Rest style
+##Call in Rest style
 #http://127.0.0.1:8000/apps/tethys-hstools/res/72b1d67d415b4d949293b1e46d02367d/fn/referencetimeseries-2_23_2015-wml_2_0.wml/
 def restcall(request,res_id,filename):
 
@@ -55,7 +55,6 @@ def home(request):
     timeseries_plot = chartPara(html,filename)
 
     context = {"timeseries_plot":timeseries_plot}
-
     return render(request, 'tethys_hstools/home.html', context)
 
 
