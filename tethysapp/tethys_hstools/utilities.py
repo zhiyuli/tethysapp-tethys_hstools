@@ -6,6 +6,7 @@ import urllib2
 from lxml import etree
 from datetime import datetime
 from datetime import timedelta
+from dateutil import parser
 
 def get_persistent_store_engine(persistent_store_name):
     """
@@ -29,67 +30,27 @@ def get_version(root):
             break
     return wml_version
 
-
+#drew 20150401 convert date string into datetime obj
 def time_str_to_datetime(t):
-    # if time format looks like '2014-07-22T10:45:00.000'
     try:
-        ret = datetime.strptime(unicode(t), '%Y-%m-%dT%H:%M:%S.%f')
+        t_datetime=parser.parse(t)
+        return t_datetime
     except ValueError:
-        try:
-            # if time format looks like '2014-07-22T10:45:00.000-05:00'
-            offset_hrs = int(t[-6:-3])
-            offset_min = int(t[-2:])                                                                                     # Changed By Drew
-            t_time = t[:-6]
-
-            temp_datetime=None  #added by Drew 2015-02-27
-            if len(t_time)==19:
-                temp_datetime=datetime.strptime(unicode(t_time), '%Y-%m-%dT%H:%M:%S')
-            else:
-                temp_datetime=datetime.strptime(unicode(t_time), '%Y-%m-%dT%H:%M:%S.%f')
+        print "time_str_to_datetime error: "+ t
+        raise Exception("time_str_to_datetime error: "+ t)
+        return datetime.now()
 
 
-            offset=timedelta(hours=int(offset_hrs),minutes=int(offset_min))
-            time_datetime=temp_datetime + offset
-            ret = time_datetime
-        except ValueError:
-            try:
-                # if time format looks like '2014-07-22T10:45:00'
-                ret = datetime.strptime(unicode(t), '%Y-%m-%dT%H:%M:%S')
-            except ValueError:
-                #if the time format looks like '2014-07-22 10:45:00'
-                try:
-                    ret = datetime.strptime(unicode(t), '%Y-%m-%d %H:%M:%S')
-                except ValueError:
-                    print ("time_str_to_datetime error")
-                    raise Exception('time_str_to_datetime error')
-
-    return ret
-
-
+#drew 20150401 convert datetime obj into decimal second (epoch second)
 def time_to_int(t):
-    # if time format looks like '2014-07-22T10:45:00.000'
     try:
-        ret = int(datetime.strptime(unicode(t), '%Y-%m-%dT%H:%M:%S.%f').strftime('%s'))
+        d=parser.parse(t)
+        t_sec_str=d.strftime('%s')
+        return int(t_sec_str)
     except ValueError:
-        try:
-            # if time format looks like '2014-07-22T10:45:00.000-05:00'
-            offset_hrs = int(t[-6:-3])
-            offset_min = int(t[-2:])                                                                                     # Changed By Drew
-            t = t[:-6]
+        print ("time_to_int error: "+ t)
+        raise Exception('time_to_int error: ' + t)
 
-            cur_datetime=datetime.strptime(unicode(t), '%Y-%m-%dT%H:%M:%S.%f')
-            epoch_secs= (cur_datetime-datetime(1970,1,1)).total_seconds()
-
-            ##epoch_secs = int(datetime.strptime(unicode(t), '%Y-%m-%dT%H:%M:%S.%f').strftime('%s'))
-            ret = epoch_secs + offset_hrs*3600 + offset_min*60
-        except ValueError:
-            try:
-                # if time format looks like '2014-07-22T10:45:00'
-                ret = int(datetime.strptime(unicode(t), '%Y-%m-%dT%H:%M:%S').strftime('%s'))
-            except ValueError:
-                #if the time format looks like '2014-07-22 10:45:00'
-                ret = int(datetime.strptime(unicode(t), '%Y-%m-%d %H:%M:%S').strftime('%s'))
-    return ret
 
 
 def parse_1_0_and_1_1(root):
@@ -287,7 +248,6 @@ def parse_2_0(root):
                 val_obj=float(vals[i])
                 item=[time_obj,val_obj]
                 for_highchart.append(item)
-
             values = dict(zip(keys, vals))
             for k, v in values.items():
                 t = time_to_int(k)
@@ -309,7 +269,9 @@ def parse_2_0(root):
                     'for_highchart':for_highchart
                     }
         else:
+            print "Parsing error: The waterml document doesn't appear to be a WaterML 2.0 time series"
             return "Parsing error: The waterml document doesn't appear to be a WaterML 2.0 time series"
     except:
+        print "Parsing error: The Data in the Url, or in the request, was not correctly formatted."
         return "Parsing error: The Data in the Url, or in the request, was not correctly formatted."
 
