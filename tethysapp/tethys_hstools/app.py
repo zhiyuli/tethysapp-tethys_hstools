@@ -20,16 +20,16 @@ class TethysToolsforHydroShare(TethysAppBase):
         UrlMap = url_map_maker(self.root_url)
 
         url_maps = (UrlMap(name='home',
-                           url='tethys-hstools/res/{res_id}/fn/{filename}',
+                           url='tethys-hstools/br/{branch}/res/{res_id}/fn/{filename}',
                            controller='tethys_hstools.controllers.restcall'),
 
                     UrlMap(name='home',
                            url='tethys-hstools/',
                            controller='tethys_hstools.controllers.home'),
 
-                    UrlMap(name='postexample',
-                           url='tethys-hstools/postexample',
-                           controller='tethys_hstools.controllers.postexample'),
+                    UrlMap(name='request_demo',
+                           url='tethys-hstools/request-demo',
+                           controller='tethys_hstools.controllers.request_demo'),
 
 
 

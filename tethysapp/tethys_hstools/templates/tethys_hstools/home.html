@@ -4,16 +4,9 @@
 {% block app_navigation_items %}
 
   <li>
-    <a href="{% url 'tethys_hstools:postexample' %}">Post Request Demo</a>
+    <a href="{% url 'tethys_hstools:request_demo' %}">Request Demo</a>
   </li>
 
- <li>
-    <a href="?filename=referencetimeseries-2_23_2015-wml_2_0.wml&res_id=72b1d67d415b4d949293b1e46d02367d">Get Request Demo</a>
-  </li>
-
- <li>
-    <a href="{% url 'tethys_hstools:home' res_id='72b1d67d415b4d949293b1e46d02367d' filename='referencetimeseries-2_23_2015-wml_2_0.wml' %}">REST Test Demo</a>
-  </li>
 {% endblock %}
 
 {% block app_content %}
